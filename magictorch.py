@@ -1,4 +1,6 @@
 import cv
+import os
+import sys
 
 def GrabAndShow(windowName, captureDevice):
 	frame = cv.QueryFrame(captureDevice)
@@ -6,6 +8,7 @@ def GrabAndShow(windowName, captureDevice):
 		return
 	cv.Flip(frame, None, 1) # Mirror the display.
 	DetectFaces(frame)
+	DetectCorners(frame)
 	cv.ShowImage(windowName,frame)
 
 def CreateWindow(windowName):
@@ -22,7 +25,7 @@ def InitCapture():
 def ReleaseCapture(captureDevice):
 	del captureDevice
 
-def DetectFaces(image):
+def ConvertToGrayscale(image):
 	imageSize = cv.GetSize(image)
 	
 	# Convert to grayscale
@@ -31,6 +34,10 @@ def DetectFaces(image):
 	
 	# Equalise histogram
 	cv.EqualizeHist(grayscale, grayscale)
+	return grayscale
+
+def DetectFaces(image):	
+	grayscale = ConvertToGrayscale(image)
 	
 	# Detect objects
 	cascade = cv.Load('/opt/local/share/OpenCV/haarcascades/haarcascade_frontalface_alt.xml')
@@ -42,6 +49,17 @@ def DetectFaces(image):
 						( int(x + w), int(y + h) ),
 						cv.CV_RGB(0, 255, 0), 3, 8, 0
 						)
+
+def DetectCorners(image):
+	grayscale = ConvertToGrayscale(image)
+	dst = cv.CreateMat(image.height, image.width, cv.CV_32FC1)
+	cv.CornerHarris(grayscale, dst, 3) # blocksize = 3
+	
+	for i in range(0,dst.width):
+		for j in range(0,dst.height):
+			val = cv.Get2D(dst,j,i)
+			if val[0] > 10e-6:
+				cv.Circle( image, (i,j), 2, cv.RGB(0,255,0), 1, 8, 0 )
 
 def EnumerateCameras():
 	cameraList=[]
