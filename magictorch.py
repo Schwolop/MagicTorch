@@ -7,9 +7,11 @@ def GrabAndShow(windowName, captureDevice):
 	if frame is None:
 		return
 	cv.Flip(frame, None, 1) # Mirror the display.
-	DetectFaces(frame)
-	DetectCorners(frame)
-	cv.ShowImage(windowName,frame)
+	outputImage = cv.CloneImage(frame) # Copy frame to create the base output image.
+	DetectFaces(frame, outputImage)
+	DetectCorners(frame, outputImage)
+#	DetectFeatures(frame, outputImage) # Tom discovered the all important difference between cv and cv2... Will play again tomorrow porting this to cv2.
+	cv.ShowImage(windowName,outputImage)
 
 def CreateWindow(windowName):
 	cv.NamedWindow(windowName, flags=cv.CV_WINDOW_AUTOSIZE)
@@ -19,8 +21,9 @@ def CloseWindow(windowName):
 	cv.DestroyWindow(windowName)
 
 def InitCapture():
-	for camera in EnumerateCameras():
-		return cv.CaptureFromCAM(camera) # Return first. Todo, GUI selection.
+	return cv.CaptureFromCAM(-1) # Assume just one camera.
+	#for camera in EnumerateCameras():
+	#	return cv.CaptureFromCAM(camera) # Return first. Todo, GUI selection.
 
 def ReleaseCapture(captureDevice):
 	del captureDevice
@@ -36,30 +39,46 @@ def ConvertToGrayscale(image):
 	cv.EqualizeHist(grayscale, grayscale)
 	return grayscale
 
-def DetectFaces(image):	
-	grayscale = ConvertToGrayscale(image)
+def DetectFaces(imageIn, imageOut):	
+	grayscale = ConvertToGrayscale(imageIn)
 	
 	# Detect objects
 	cascade = cv.Load('/opt/local/share/OpenCV/haarcascades/haarcascade_frontalface_alt.xml')
 	faces = cv.HaarDetectObjects(grayscale,cascade,cv.CreateMemStorage(0), 1.2, 2, cv.CV_HAAR_DO_CANNY_PRUNING, (50,50))
 
 	for ((x,y,w,h),n) in faces:
-		cv.Rectangle(	image, 
+		cv.Rectangle(	imageOut, 
 						( int(x), int(y) ),
 						( int(x + w), int(y + h) ),
 						cv.CV_RGB(0, 255, 0), 3, 8, 0
 						)
 
-def DetectCorners(image):
-	grayscale = ConvertToGrayscale(image)
-	dst = cv.CreateMat(image.height, image.width, cv.CV_32FC1)
-	cv.CornerHarris(grayscale, dst, 3) # blocksize = 3
+def DetectCorners(imageIn, imageOut):
+	grayscale = ConvertToGrayscale(imageIn)
+
+# Harris version
+#	dst = cv.CreateMat(imageIn.height, imageIn.width, cv.CV_32FC1)
+#	blockSize = 3
+#	cv.CornerHarris(grayscale, dst, blocksize )
+#	for i in range(0,dst.width):
+#		for j in range(0,dst.height):
+#			val = cv.Get2D(dst,j,i)
+#			if val[0] > 10e-6:
+#				cv.Circle( imageIn, (i,j), 2, cv.RGB(0,255,0), 1, 8, 0 )
+
+# GoodFeaturesToTrack version
+	cornerCount = 250
+	qualityLevel = 0.1
+	minDistance = 10
+	mask = None
+	blockSize = 3
+	useHarris = 0
+	k = 0.04
+	temp = grayscale # Ignored parameter.
+	corners = cv.GoodFeaturesToTrack(grayscale, temp, temp, cornerCount, qualityLevel, minDistance, mask, blockSize, useHarris, k)
 	
-	for i in range(0,dst.width):
-		for j in range(0,dst.height):
-			val = cv.Get2D(dst,j,i)
-			if val[0] > 10e-6:
-				cv.Circle( image, (i,j), 2, cv.RGB(0,255,0), 1, 8, 0 )
+	for corner in corners:
+		cv.Circle( imageOut, (int(corner[0]),int(corner[1])), 2, cv.RGB(0,255,0), 1, 8, 0 )
 
 def EnumerateCameras():
 	cameraList=[]
