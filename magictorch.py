@@ -51,13 +51,18 @@ class App:
 		self.p0 = None
 		self.use_ransac = True
 		self.frame0 = None
+		self.output = None
 
 	def run(self):
+		cv2.namedWindow("MagicTorch", cv2.WINDOW_NORMAL)# | cv2.GUI_NORMAL) # GUI_NORMAL not supported for some reason?
+		cv2.resizeWindow("MagicTorch", 848, 480 ) # pico-projector native res.
 		while True:
 			# Read a camera frame, convert to grayscale, and copy.
 			ret, frame = self.cam.read()
 			frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 			vis = frame.copy()
+			if self.output is None:
+				self.output = cv2.resize(vis,(848,480))
 
 			# If we have a prior set of features to track...
 			if self.p0 is not None:
@@ -104,7 +109,11 @@ class App:
 						draw_str(vis, (20, 20), 'feature count: %d' % len(p))
 
 			# Display the frame copy (with annotations)
-			cv2.imshow('MagicTorch', vis)
+			h,w = vis.shape[:2]
+			H,W = self.output.shape[:2]
+			cv2.rectangle( self.output, (0,0), (W,H), (0,0,0), -1 ) # Fill window with black.
+			self.output[ (H-h)/2 : H - ((H-h)/2), (W-w)/2 : W - ((W-w)/2) ] = vis # Draw vis in centre of self.output.
+			cv2.imshow('MagicTorch', self.output) # Show self.output
 
 			ch = 0xFF & cv2.waitKey(1)
 			if ch == 27: # If Esc, exit
