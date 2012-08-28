@@ -2,3 +2,5 @@
 video.pyc
 
 common.pyc
+
+*.pyc
