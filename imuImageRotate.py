@@ -3,6 +3,18 @@
 
 # Rotates an image by the opposite of the z-rotation of the IMU
 
+''' Calibration Defaults
+# Each line starts with "calibration type:"
+# followed by the x, y and z calibration, separated by a comma.
+# Multiplier and Divider are written as "mul/div"
+0: 1000/1019, 1000/1009, 1000/1026
+1: 33, 19, 40
+2: 500/497, 500/511, 500/441
+3: 4, 217, 47
+4: 5968/5946, 2768/2686, 2451/2440
+5: -9, 20, -5, 1670, -3, -7, 5, 2709
+'''
+
 import cv2, math
 from tinkerforge.ip_connection import IPConnection
 from tinkerforge.brick_imu import IMU
@@ -107,7 +119,7 @@ if __name__ == "__main__":
 		udShift = math.floor( (-p*180.0/math.pi / outputFOV[1]) * H )
 		# Shift the image left/right proportional to the yaw.
 		lrShift = math.floor( (-y*180.0/math.pi / outputFOV[0]) * W )
-		print "U/D: " + str(udShift) + ", L/R: " + str(lrShift)
+		#print "U/D: " + str(udShift) + ", L/R: " + str(lrShift)
 		
 		rotatedFrame = cv2.warpAffine(frame, rotationMatrix, (w,h))
 		#print "Roll: " + str(r*180.0/math.pi) + ", Pitch: " + str(p*180.0/math.pi) + ", Yaw: " + str(y*180.0/math.pi)
