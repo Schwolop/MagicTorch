@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Rotates an image by the opposite of the z-rotation of the IMU
+# Attempts to stablize an image based on the orientation of an IMU.
 
 ''' Calibration Defaults
 # Each line starts with "calibration type:"
@@ -15,6 +15,18 @@
 5: -9, 20, -5, 1670, -3, -7, 5, 2709
 '''
 
+''' Magnetometer calibrated with IMU strapped to projector (off).
+# Each line starts with "calibration type:"
+# followed by the x, y and z calibration, separated by a comma.
+# Multiplier and Divider are written as "mul/div"
+0: 1000/1019, 1000/1009, 1000/1026
+1: 33, 19, 40
+2: 500/316, 500/387, 500/528
+3: -316, -388, 347
+4: 5968/5946, 2768/2686, 2451/2440
+5: -9, 20, -5, 1670, -3, -7, 5, 2709
+'''
+
 import cv2, math
 from tinkerforge.ip_connection import IPConnection
 from tinkerforge.brick_imu import IMU
@@ -24,22 +36,23 @@ class TomIMU:
 		self.host=host
 		self.port=port
 		self.uid=uid
-		self.imu = IMU(uid) # Create device object
-		self.ipcon = IPConnection(self.host,self.port)  # Create IPconnection to brickd
-		self.ipcon.add_device(self.imu) # Add device to IP connection
+		self._imu = IMU(uid) # Create device object
+		self._ipcon = IPConnection(self.host,self.port)  # Create IPconnection to brickd
+		self._ipcon.add_device(self._imu) # Add device to IP connection
 		
 		self.ready = True # Don't use device before it is added to a connection
 		
 		# Set period for quaternion callback (defaults to 100ms)
-		self.imu.set_quaternion_period(callbackPeriodMS)
+		self._imu.set_quaternion_period(callbackPeriodMS)
 		
 		# Register quaternion callback
-		self.imu.register_callback(self.imu.CALLBACK_QUATERNION, self.QuaternionCallback)
+		self._imu.register_callback(self._imu.CALLBACK_QUATERNION, self._QuaternionCallback)
 		
-		self.imu.leds_off() # Turn LEDs off.
+		self._imu.leds_off() # Turn LEDs off.
+		self._imu.set_convergence_speed(5) # 5ms convergence.
 		
 		# Orientation origin and most recent values
-		q = self.imu.get_quaternion() # Get a temp quaternion from current pose.
+		q = self._imu.get_quaternion() # Get a temp quaternion from current pose.
 		self.rel_x = q.x
 		self.rel_y = q.y
 		self.rel_z = q.z
@@ -48,11 +61,11 @@ class TomIMU:
 		self.y = q.y
 		self.z = q.z
 		self.w = q.w
-	
+		
 	def __destroy__(self):
-		self.ipcon.destroy()
+		self._ipcon.destroy()
 	
-	def QuaternionCallback(self, x, y, z, w):
+	def _QuaternionCallback(self, x, y, z, w):
 		""" Records the most recent quaternion orientation values. """
 		self.x,self.y,self.z,self.w = x,y,z,w
 		
@@ -81,6 +94,12 @@ class TomIMU:
 		yn = w * self.rel_y - x * self.rel_z + y * self.rel_w + z * self.rel_x
 		zn = w * self.rel_z + x * self.rel_y - y * self.rel_x + z * self.rel_w
 		return xn,yn,zn,wn
+	
+	def GetConvergenceSpeed(self):
+		return self._imu.get_convergence_speed()
+	
+	def SetConvergenceSpeed(self, speed):
+		self._imu.set_convergence_speed(speed)
 
 if __name__ == "__main__":
 	HOST = "localhost"
@@ -89,10 +108,10 @@ if __name__ == "__main__":
 	outputResolution = (848,480)
 	outputFOV = (45,45) # degrees.
 	
-	imu = TomIMU(HOST,PORT,UID,10)
+	imu = TomIMU(HOST,PORT,UID,1)
 	
 	print "Press Esc to exit..."
-	windowName = "IMU Rotate"
+	windowName = "IMU Image Stabilization"
 	cv2.namedWindow(windowName, cv2.WINDOW_NORMAL)# | cv2.GUI_NORMAL) # GUI_NORMAL not supported for some reason?
 	cv2.resizeWindow(windowName, *outputResolution ) # pico-projector native res.
 	cam = cv2.VideoCapture(0)
@@ -146,10 +165,16 @@ if __name__ == "__main__":
 				print "humpf"
 		cv2.imshow(windowName, output)
 		
-		key = 0xFF & cv2.waitKey(10)
+		key = 0xFF & cv2.waitKey(1)
 		if key == 27: #Esc to quit.
 			break
 		elif key == ord(' '): # If spacebar, reset orientation origin.
 			imu.SetOrientationOrigin()
+		elif key == ord('+'):
+			imu.SetConvergenceSpeed( min( 1000, imu.GetConvergenceSpeed() + 5 ) )
+			print "IMU convergence speed increased to " + str(imu.GetConvergenceSpeed()) + "ms."
+		elif key == ord('-'):
+			imu.SetConvergenceSpeed( max( 1, imu.GetConvergenceSpeed() - 5 ) )
+			print "IMU convergence speed decreased to " + str(imu.GetConvergenceSpeed()) + "ms."
 	cv2.destroyAllWindows()
 
